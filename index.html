@@ -14,7 +14,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Google Identity Services (선택적 실제 OAuth 연동용) -->
+  <!-- Google Identity Services (실제 Google OAuth 2.0 연동) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <style>
@@ -82,7 +82,7 @@
       <!-- 우측: 싱크 브릿지(Sync Bridge) + 설정/백업 + 구글 로그인 -->
       <div class="flex items-center space-x-2 sm:space-x-3">
         
-        <!-- 싱크 브릿지 (메인 메뉴바 상시 위치: 온/오프라인 상태 & 수동 동기화) -->
+        <!-- 싱크 브릿지 (메인 메뉴바 상시 위치: 온/오프라인 상태 & 실제 Drive 양방향 동기화) -->
         <div class="flex items-center bg-slate-100 rounded-full p-1 border border-slate-200 shadow-inner">
           <button onclick="toggleOnlineMode()" id="sync-bridge-btn" title="클릭하여 온라인/오프라인 모드 전환"
             class="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold transition-all bg-emerald-600 text-white shadow-sm">
@@ -90,21 +90,21 @@
             <span id="sync-status-text" class="hidden sm:inline">Sync: 온라인</span>
             <span id="sync-status-short" class="sm:hidden">ON</span>
           </button>
-          <button onclick="triggerManualSync()" title="지금 구글 드라이브(cores)와 즉시 동기화"
+          <button onclick="triggerManualSync(true)" title="지금 Google Drive(cores/)와 즉시 양방향 동기화"
             class="p-1.5 text-slate-600 hover:text-slate-900 rounded-full hover:bg-slate-200 transition">
             <i data-lucide="cloud-upload" class="w-4 h-4"></i>
           </button>
         </div>
 
         <!-- 환경설정 & 통째 백업/승계 모달 버튼 -->
-        <button onclick="openSettingsModal()" title="백업/승계 및 API 설정"
+        <button onclick="openSettingsModal()" title="백업/승계 및 OAuth 설정"
           class="p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100 border border-transparent hover:border-slate-200 transition">
           <i data-lucide="settings" class="w-5 h-5"></i>
         </button>
 
-        <!-- 우측 최상단 간소화 Google 로그인 -->
+        <!-- 우측 최상단 실제 Google OAuth 로그인 -->
         <div id="auth-container">
-          <button onclick="openLoginModal()" id="google-login-btn"
+          <button onclick="startRealGoogleLogin()" id="google-login-btn"
             class="flex items-center space-x-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition">
             <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
@@ -475,7 +475,11 @@
             <button onclick="exportMasterBackup()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
               <i data-lucide="download" class="w-3.5 h-3.5"></i> cores 통째 백업 (.json)
             </button>
-            <button onclick="triggerManualSync()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
+            <a id="open-google-drive-link" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener noreferrer"
+              class="px-3.5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
+              <i data-lucide="external-link" class="w-3.5 h-3.5 text-blue-600"></i> Google Drive 열기
+            </a>
+            <button onclick="triggerManualSync(true)" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition">
               <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 양방향 동기화
             </button>
           </div>
@@ -663,27 +667,27 @@
       </div>
     </div>
   </div>
-
-  <!-- [모달 D] 간소화 Google 로그인 모달 -->
+  <!-- [모달 D] Google 계정 연결 안내 및 수동/로컬 전환 모달 -->
   <div id="login-modal" class="hidden fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 fade-in">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-        <h3 class="text-base font-bold text-slate-900">Google 계정 간소화 연결</h3>
+        <h3 class="text-base font-bold text-slate-900">Google 계정 & Drive 동기화 관리</h3>
         <button onclick="closeLoginModal()" class="text-slate-400 hover:text-slate-700"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <p class="text-xs text-slate-600 leading-relaxed">
-        사용하실 Google 이메일을 입력하면 해당 계정 전용 독립 워크스페이스와 최상위 <strong><code>cores/</code></strong> 드라이브 구조가 즉시 활성화됩니다.
+        연결된 Google 계정의 드라이브 최상위에 <strong><code>cores/</code></strong> 폴더를 자동 생성하고 PC·모바일 간 실시간으로 양방향 동기화합니다.
       </p>
-      <div class="space-y-2">
-        <label class="block text-xs font-bold text-slate-700">Google 이메일 주소</label>
-        <input type="email" id="login-email-input" placeholder="example@gmail.com" class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1">
+        <div class="font-bold text-slate-800">연동 상태: <span id="modal-drive-conn-status" class="text-indigo-600">미연결 (로컬 저장 모드)</span></div>
+        <div class="text-slate-500 break-all">Client ID: <code id="modal-client-id-preview"></code></div>
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2 pt-2">
-        <button onclick="triggerRealGoogleOAuth()" class="text-xs text-blue-600 hover:underline font-medium">
-          실제 Google OAuth 인증 실행 (Client ID 설정 시)
+        <button onclick="disconnectGoogleAccount()" id="modal-disconnect-btn" class="hidden px-3.5 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl">
+          연결 해제 (로컬 전환)
         </button>
-        <button onclick="confirmSimplifiedLogin()" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl">
-          계정 연결하기
+        <button onclick="startRealGoogleLogin(); closeLoginModal();" class="ml-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5">
+          <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+          <span>Google 계정으로 인증하기</span>
         </button>
       </div>
     </div>
@@ -719,15 +723,15 @@
         </div>
       </div>
 
-      <!-- 2. 무료 원칙 API 연결 설정 (선택사항) -->
+      <!-- 2. Google OAuth & 무료 원칙 API 연결 설정 -->
       <div class="space-y-3 text-xs">
-        <div class="font-bold text-slate-800">고도화 연동 설정 (선택 사항 · Zero-Cost 원칙)</div>
+        <div class="font-bold text-slate-800">Google Drive 실제 연동 설정 (기본 내장 완료)</div>
         <div>
-          <label class="block font-semibold text-slate-600 mb-1">Google OAuth Client ID (실제 드라이브 API 연동 시)</label>
-          <input type="text" id="setting-client-id" placeholder="xxxx.apps.googleusercontent.com" class="w-full border border-slate-300 rounded-xl px-3 py-2">
+          <label class="block font-semibold text-slate-600 mb-1">Google OAuth Client ID</label>
+          <input type="text" id="setting-client-id" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 text-slate-700">
         </div>
         <div>
-          <label class="block font-semibold text-slate-600 mb-1">Gemini API Key (무료 티어 · 미입력 시 내장 무료 엔진 사용)</label>
+          <label class="block font-semibold text-slate-600 mb-1">Gemini API Key (선택 사항 · 미입력 시 내장 무료 엔진 사용)</label>
           <input type="password" id="setting-gemini-key" placeholder="AIzaSy..." class="w-full border border-slate-300 rounded-xl px-3 py-2">
         </div>
       </div>
@@ -765,26 +769,27 @@
     </div>
   </div>
 
-  <!-- [모달 G] 무료 정책 변경 / 과금 방어 Fallback 팝업 -->
-  <div id="fallback-popup" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 border-2 border-amber-400 fade-in">
-      <div class="flex items-center space-x-2 text-amber-600">
-        <i data-lucide="shield-alert" class="w-6 h-6"></i>
-        <h3 class="text-base font-bold text-slate-900">무료 호출 한도 초과 또는 유료 전환 감지</h3>
-      </div>
-      <p class="text-xs text-slate-600 leading-relaxed">
-        외부 AI 서비스의 유료 정책 전환 또는 무료 한도 초과가 감지되어 과금 방지를 위해 자동 차단되었습니다. 아래에서 <strong>새 카테고리명을 직접 입력</strong>하거나 기존 목록에서 수동 선택해 주세요.
-      </p>
-      <input type="text" id="fallback-custom-category" placeholder="새 카테고리 이름 직접 입력..." class="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm">
-      <div class="flex justify-end space-x-2">
-        <button onclick="closeFallbackPopup()" class="px-3 py-1.5 text-xs text-slate-500">닫기</button>
-        <button onclick="applyFallbackCategory()" class="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-xl">수동 분류 적용</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== 5. JAVASCRIPT 핵심 엔진 ==================== -->
+  <!-- ==================== 5. JAVASCRIPT 핵심 엔진 & Google Drive API v3 ==================== -->
   <script>
+    // ---------- 발급받은 Google OAuth 2.0 클라이언트 ID 및 권한 설정 ----------
+    const DEFAULT_GOOGLE_CLIENT_ID = '45921995372-nskktkuke0ahpj3bi5f2qrmppdggahmt.apps.googleusercontent.com';
+    const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
+
+    let googleAccessToken = null;
+    let tokenClient = null;
+    let autoSyncTimer = null;
+    let isSyncingNow = false;
+
+    // Google Drive 내 cores 폴더 및 하위 폴더 ID 캐시
+    let driveFolderIds = {
+      root: null,       // cores
+      notes: null,      // 01_Notes_and_Categories
+      inbox: null,      // 02_Inbox_and_Review
+      balance: null,    // 03_Balance_Checker_History
+      deleted: null,    // 99_Deleted_Categories
+      masterFileId: null
+    };
+
     // ---------- 전역 상태 및 템플릿 정의 ----------
     let currentUser = { email: 'guest_local', name: '로컬 사용자' };
     let isOnline = true;
@@ -886,8 +891,13 @@
         novelNotes: '주인공: 전직 연구원 출신 프리랜서 / 핵심 모티프: 코어(Core)와 균형'
       },
       pendingSyncCount: 0,
-      lastSync: '-'
+      lastSync: '-',
+      updatedAt: 0
     };
+
+    function getActiveClientId() {
+      return localStorage.getItem('CORSE_CLIENT_ID') || DEFAULT_GOOGLE_CLIENT_ID;
+    }
 
     // ---------- 계정별 독립 저장소 로드 & 세이브 ----------
     function getStorageKey() {
@@ -899,6 +909,7 @@
       if (saved) {
         appData = JSON.parse(saved);
         if (!appData.deletedCategories) appData.deletedCategories = [];
+        if (!appData.updatedAt) appData.updatedAt = Date.now();
         if (!appData.workspaceData) {
           appData.workspaceData = {
             opicPhrases: ['To be honest with you,', 'What I find most fascinating is...'],
@@ -912,6 +923,7 @@
       } else {
         appData.categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
         appData.deletedCategories = [];
+        appData.updatedAt = Date.now();
         appData.memos = [
           {
             id: Date.now() - 7200000,
@@ -955,90 +967,397 @@
       renderAll();
     }
 
-    function saveUserData() {
+    function saveUserData(triggerCloudSync = true) {
+      appData.updatedAt = Date.now();
       localStorage.setItem(getStorageKey(), JSON.stringify(appData));
       updateSyncStatusUI();
+
+      // Google Drive가 연결되어 있고 온라인 상태면 2초 뒤 백그라운드 자동 동기화 실행
+      if (triggerCloudSync && googleAccessToken && isOnline) {
+        clearTimeout(autoSyncTimer);
+        autoSyncTimer = setTimeout(() => {
+          syncWithGoogleDrive(false);
+        }, 2000);
+      }
     }
 
-    // ---------- 1. 간소화 Google 로그인 & 계정 전환 ----------
+    // ---------- 1. 실제 Google Identity Services (OAuth 2.0) 로그인 ----------
+    function initGoogleOAuthClient() {
+      if (!window.google || !google.accounts || !google.accounts.oauth2) return false;
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: getActiveClientId(),
+        scope: GOOGLE_DRIVE_SCOPE,
+        callback: async (tokenResponse) => {
+          if (tokenResponse.error) {
+            showToast(`Google 인증 오류: ${tokenResponse.error}`);
+            return;
+          }
+          googleAccessToken = tokenResponse.access_token;
+          sessionStorage.setItem('CORSE_G_TOKEN', googleAccessToken);
+          await fetchGoogleUserProfile();
+          isOnline = true;
+          updateSyncStatusUI();
+          await syncWithGoogleDrive(true);
+        }
+      });
+      return true;
+    }
+
+    function startRealGoogleLogin() {
+      if (window.location.protocol === 'file:') {
+        showToast('로컬 파일(file://)에서는 구글 보안 정책상 OAuth 팝업이 차단됩니다. 깃허브 URL(https://...github.io/corse/)에서 실행해 주세요!');
+        return;
+      }
+      if (!tokenClient && !initGoogleOAuthClient()) {
+        showToast('Google 인증 스크립트를 불러오는 중입니다. 1~2초 후 다시 눌러주세요.');
+        return;
+      }
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    async function fetchGoogleUserProfile() {
+      try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${googleAccessToken}` }
+        });
+        if (res.ok) {
+          const profile = await res.json();
+          const email = profile.email || 'google_user';
+          const name = profile.name || email.split('@')[0];
+          localStorage.setItem('CORSE_LAST_EMAIL', email);
+          localStorage.setItem('CORSE_LAST_NAME', name);
+          applyConnectedUserUI(email, name);
+          loadUserData();
+        }
+      } catch (e) {
+        console.error('프로필 조회 실패:', e);
+      }
+    }
+
+    function applyConnectedUserUI(email, name) {
+      currentUser = { email, name };
+      document.getElementById('auth-container').innerHTML = `
+        <div class="flex items-center space-x-2 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center uppercase">${name[0]}</div>
+          <span class="text-xs font-semibold text-emerald-950 max-w-[120px] truncate hidden sm:inline">${email}</span>
+          <button onclick="openLoginModal()" title="Google Drive 연동 상태 관리" class="text-emerald-700 hover:text-emerald-900">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      `;
+      document.getElementById('current-user-label').textContent = `Google Drive 실시간 연동됨: ${email} (/cores/ 폴더 동기화 활성)`;
+      lucide.createIcons();
+    }
+
+    function disconnectGoogleAccount() {
+      googleAccessToken = null;
+      sessionStorage.removeItem('CORSE_G_TOKEN');
+      localStorage.removeItem('CORSE_LAST_EMAIL');
+      localStorage.removeItem('CORSE_LAST_NAME');
+      driveFolderIds = { root: null, notes: null, inbox: null, balance: null, deleted: null, masterFileId: null };
+      currentUser = { email: 'guest_local', name: '로컬 사용자' };
+      document.getElementById('auth-container').innerHTML = `
+        <button onclick="startRealGoogleLogin()" id="google-login-btn"
+          class="flex items-center space-x-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition">
+          <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z"/>
+            <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z"/>
+          </svg>
+          <span>Google 로그인</span>
+        </button>
+      `;
+      document.getElementById('current-user-label').textContent = '로컬 게스트 모드 (루트 폴더: cores/ 독립 연결)';
+      closeLoginModal();
+      loadUserData();
+      showToast('Google 계정 연결이 해제되고 로컬 모드로 전환되었습니다.');
+    }
+
     function openLoginModal() {
-      document.getElementById('login-email-input').value = currentUser.email !== 'guest_local' ? currentUser.email : '';
+      const statusEl = document.getElementById('modal-drive-conn-status');
+      const discBtn = document.getElementById('modal-disconnect-btn');
+      document.getElementById('modal-client-id-preview').textContent = getActiveClientId();
+      if (googleAccessToken) {
+        statusEl.textContent = `연결 완료 (${currentUser.email})`;
+        statusEl.className = 'text-emerald-600 font-bold';
+        discBtn.classList.remove('hidden');
+      } else {
+        statusEl.textContent = '미연결 (로컬 저장 모드)';
+        statusEl.className = 'text-amber-600 font-bold';
+        discBtn.classList.add('hidden');
+      }
       document.getElementById('login-modal').classList.remove('hidden');
+      lucide.createIcons();
     }
     function closeLoginModal() {
       document.getElementById('login-modal').classList.add('hidden');
     }
-    function confirmSimplifiedLogin() {
-      const email = document.getElementById('login-email-input').value.trim();
-      if (!email) return;
-      setLoggedInUser(email, email.split('@')[0]);
-      closeLoginModal();
-      if (isOnline) triggerManualSync();
-    }
-    function triggerRealGoogleOAuth() {
-      const clientId = localStorage.getItem('CORSE_CLIENT_ID');
-      if (!clientId) {
-        showToast('설정(톱니바퀴)에서 Google OAuth Client ID를 먼저 등록하거나, 위 이메일 입력으로 간소화 로그인을 이용해 주세요.');
-        return;
+
+    // ---------- 2. 실제 Google Drive API v3 (cores/ 폴더 구조 생성 & 양방향 동기화) ----------
+    async function driveApiFetch(url, options = {}) {
+      const headers = {
+        Authorization: `Bearer ${googleAccessToken}`,
+        ...(options.headers || {})
+      };
+      const response = await fetch(url, { ...options, headers });
+      if (response.status === 401) {
+        googleAccessToken = null;
+        sessionStorage.removeItem('CORSE_G_TOKEN');
+        throw new Error('AUTH_EXPIRED');
       }
-      if (window.google) {
-        const tokenClient = google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email',
-          callback: async (resp) => {
-            if (resp.access_token) {
-              const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${resp.access_token}` }
-              }).then(r => r.json());
-              setLoggedInUser(info.email, info.name || info.email.split('@')[0]);
-              closeLoginModal();
-              triggerManualSync();
-            }
-          }
-        });
-        tokenClient.requestAccessToken();
-      }
-    }
-    function setLoggedInUser(email, name) {
-      currentUser = { email, name };
-      document.getElementById('auth-container').innerHTML = `
-        <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-          <div class="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center uppercase">${name[0]}</div>
-          <span class="text-xs font-semibold text-slate-800 max-w-[110px] truncate hidden sm:inline">${email}</span>
-          <button onclick="openLoginModal()" title="계정 전환" class="text-slate-500 hover:text-indigo-600"><i data-lucide="repeat" class="w-3.5 h-3.5"></i></button>
-        </div>
-      `;
-      document.getElementById('current-user-label').textContent = `연동 계정: ${email} (Google Drive /cores/ 독립 폴더 연결됨)`;
-      loadUserData();
+      return response;
     }
 
-    // ---------- 2. 싱크 브릿지 (Sync Bridge) ----------
+    async function findOrCreateDriveFolder(folderName, parentId = null) {
+      let query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+      if (parentId) query += ` and '${parentId}' in parents`;
+      else query += ` and 'root' in parents`;
+
+      const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+      const searchRes = await driveApiFetch(searchUrl);
+      const searchData = await searchRes.json();
+
+      if (searchData.files && searchData.files.length > 0) {
+        return searchData.files[0].id;
+      }
+
+      const metadata = {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder'
+      };
+      if (parentId) metadata.parents = [parentId];
+
+      const createRes = await driveApiFetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(metadata)
+      });
+      const created = await createRes.json();
+      return created.id;
+    }
+
+    async function ensureCoresFolderHierarchy() {
+      if (!driveFolderIds.root) {
+        driveFolderIds.root = await findOrCreateDriveFolder('cores', null);
+        const driveLink = document.getElementById('open-google-drive-link');
+        if (driveLink) driveLink.href = `https://drive.google.com/drive/folders/${driveFolderIds.root}`;
+      }
+      if (!driveFolderIds.notes) {
+        driveFolderIds.notes = await findOrCreateDriveFolder('01_Notes_and_Categories', driveFolderIds.root);
+      }
+      if (!driveFolderIds.inbox) {
+        driveFolderIds.inbox = await findOrCreateDriveFolder('02_Inbox_and_Review', driveFolderIds.root);
+      }
+      if (!driveFolderIds.balance) {
+        driveFolderIds.balance = await findOrCreateDriveFolder('03_Balance_Checker_History', driveFolderIds.root);
+      }
+      if (!driveFolderIds.deleted) {
+        driveFolderIds.deleted = await findOrCreateDriveFolder('99_Deleted_Categories', driveFolderIds.root);
+      }
+    }
+
+    async function upsertJsonFileInDrive(fileName, parentId, jsonObj, knownFileId = null) {
+      let fileId = knownFileId;
+      if (!fileId) {
+        const q = `name='${fileName}' and '${parentId}' in parents and trashed=false`;
+        const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+        const data = await res.json();
+        if (data.files && data.files.length > 0) fileId = data.files[0].id;
+      }
+
+      const metadata = { name: fileName, mimeType: 'application/json' };
+      if (!fileId) metadata.parents = [parentId];
+
+      const boundary = 'corse_boundary_987654321';
+      const body =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(jsonObj, null, 2)}\r\n` +
+        `--${boundary}--`;
+
+      const uploadUrl = fileId
+        ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+        : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+
+      const upRes = await driveApiFetch(uploadUrl, {
+        method: fileId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body
+      });
+      const upData = await upRes.json();
+      return upData.id;
+    }
+
+    async function upsertMarkdownFileInDrive(fileName, parentId, textContent) {
+      const safeName = fileName.replace(/['\\]/g, '');
+      const q = `name='${safeName}' and '${parentId}' in parents and trashed=false`;
+      const res = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+      const data = await res.json();
+      const fileId = data.files && data.files.length > 0 ? data.files[0].id : null;
+
+      const metadata = { name: safeName, mimeType: 'text/markdown' };
+      if (!fileId) metadata.parents = [parentId];
+
+      const boundary = 'corse_md_boundary_12345';
+      const body =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: text/markdown; charset=UTF-8\r\n\r\n${textContent}\r\n` +
+        `--${boundary}--`;
+
+      const uploadUrl = fileId
+        ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart`
+        : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+
+      await driveApiFetch(uploadUrl, {
+        method: fileId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body
+      });
+    }
+
+    async function syncWithGoogleDrive(showNotification = true) {
+      if (!googleAccessToken || !isOnline || isSyncingNow) return;
+      isSyncingNow = true;
+      const icon = document.getElementById('sync-icon');
+      const txt = document.getElementById('sync-status-text');
+      if (icon) icon.classList.add('animate-spin');
+      if (txt) txt.textContent = 'Sync: 동기화 중...';
+
+      try {
+        // 1. Google Drive 최상위 cores/ 및 4개 하위 폴더 확인/생성
+        await ensureCoresFolderHierarchy();
+
+        // 2. 원격 corse_master_state.json 조회하여 양방향 병합/동기화
+        const q = `name='corse_master_state.json' and '${driveFolderIds.root}' in parents and trashed=false`;
+        const searchRes = await driveApiFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,modifiedTime)`);
+        const searchData = await searchRes.json();
+
+        if (searchData.files && searchData.files.length > 0) {
+          driveFolderIds.masterFileId = searchData.files[0].id;
+          const fileRes = await driveApiFetch(`https://www.googleapis.com/drive/v3/files/${driveFolderIds.masterFileId}?alt=media`);
+          if (fileRes.ok) {
+            const remoteState = await fileRes.json();
+            if (remoteState && remoteState.data) {
+              // 원격 데이터가 더 최신이거나 로컬 미동기화 건이 없을 경우 병합
+              mergeRemoteIntoLocal(remoteState.data);
+            }
+          }
+        }
+
+        // 3. 로컬 상태 동기화 완료 처리 및 마스터 상태 업로드
+        appData.memos.forEach(m => m.synced = true);
+        appData.pendingSyncCount = 0;
+        appData.lastSync = new Date().toLocaleTimeString('ko-KR');
+
+        const masterPayload = {
+          meta: { appName: 'CORSE', rootFolder: 'cores', owner: currentUser.email, syncedAt: new Date().toISOString() },
+          data: appData
+        };
+        driveFolderIds.masterFileId = await upsertJsonFileInDrive(
+          'corse_master_state.json',
+          driveFolderIds.root,
+          masterPayload,
+          driveFolderIds.masterFileId
+        );
+
+        // 4. 하위 폴더별 사람이 바로 읽을 수 있는 마크다운 문서 자동 반영
+        // 02_Inbox_and_Review
+        const undecidedMemos = appData.memos.filter(m => m.category === '미정').reverse();
+        const holdMemos = appData.memos.filter(m => m.category === '보류').reverse();
+        const inboxMd = `# CORSE 인박스 & 검토 대기열\n\n## 📌 미정 대기열 (최신순)\n` +
+          (undecidedMemos.map(m => `- [${m.createdAt}] ${m.content}`).join('\n') || '- 없음') +
+          `\n\n## 🗂️ 보류 / 삭제 검토함\n` +
+          (holdMemos.map(m => `- [${m.createdAt}] ${m.content}`).join('\n') || '- 없음');
+        await upsertMarkdownFileInDrive('Inbox_and_Review.md', driveFolderIds.inbox, inboxMd);
+
+        // 03_Balance_Checker_History
+        if (appData.balanceHistory.length > 0) {
+          const balMd = `# CORSE 밸런스 체커 누적 리포트\n\n` + appData.balanceHistory.map(r =>
+            `## 📊 ${r.fileName} (${r.cycle})\n` + r.details.map(d => `- ${d.name} (${d.weight}%): 목표 ${d.goal}h / 수행 ${d.actual}h / 부족 ${d.need}h`).join('\n')
+          ).join('\n\n');
+          await upsertMarkdownFileInDrive('Balance_Checker_History.md', driveFolderIds.balance, balMd);
+        }
+
+        // 01_Notes_and_Categories (활성 카테고리별 요약 문서)
+        for (const cat of appData.categories) {
+          const catMemos = appData.memos.filter(m => m.category === cat.name);
+          const catMd = `# ${cat.name}\n- 목표 비중: ${cat.weight}%\n\n## 시간순 기록\n` +
+            (catMemos.map(m => `- [${m.createdAt}] (${m.duration || 0}h) ${m.content}`).join('\n') || '- 기록 없음');
+          await upsertMarkdownFileInDrive(`${cat.name}.md`, driveFolderIds.notes, catMd);
+        }
+
+        saveUserData(false);
+        renderAll();
+        if (showNotification) {
+          showToast('Google Drive [cores/] 최상위 폴더 및 하위 4개 폴더와 양방향 동기화되었습니다!');
+        }
+      } catch (err) {
+        console.error('Google Drive 동기화 오류:', err);
+        if (err.message === 'AUTH_EXPIRED') {
+          showToast('Google 로그인 세션이 만료되었습니다. 우측 상단 Google 로그인 버튼을 다시 눌러주세요.');
+        } else if (showNotification) {
+          showToast('Google Drive 동기화 중 일시적인 오류가 발생했습니다. 로컬에 안전하게 저장되었습니다.');
+        }
+      } finally {
+        isSyncingNow = false;
+        if (icon) icon.classList.remove('animate-spin');
+        updateSyncStatusUI();
+      }
+    }
+
+    function mergeRemoteIntoLocal(remoteData) {
+      if (!remoteData) return;
+      // 원격이 더 최신 타임스탬프면 원격의 메모/카테고리/리포트를 안전하게 통합
+      const localMemoMap = new Map(appData.memos.map(m => [m.id, m]));
+      (remoteData.memos || []).forEach(rm => {
+        if (!localMemoMap.has(rm.id)) {
+          appData.memos.push({ ...rm, synced: true });
+        } else if ((remoteData.updatedAt || 0) > (appData.updatedAt || 0)) {
+          const idx = appData.memos.findIndex(m => m.id === rm.id);
+          if (idx !== -1) appData.memos[idx] = { ...rm, synced: true };
+        }
+      });
+
+      const localCatNames = new Set(appData.categories.map(c => c.name));
+      const deletedCatNames = new Set(appData.deletedCategories.map(c => c.name));
+      (remoteData.categories || []).forEach(rc => {
+        if (!localCatNames.has(rc.name) && !deletedCatNames.has(rc.name)) {
+          appData.categories.push(rc);
+        }
+      });
+
+      const localRepIds = new Set(appData.balanceHistory.map(r => r.id));
+      (remoteData.balanceHistory || []).forEach(rr => {
+        if (!localRepIds.has(rr.id)) appData.balanceHistory.push(rr);
+      });
+    }
+
+    // ---------- 싱크 브릿지 버튼 동작 ----------
     function toggleOnlineMode() {
       isOnline = !isOnline;
       updateSyncStatusUI();
-      if (isOnline && appData.pendingSyncCount > 0) {
-        triggerManualSync();
-      } else if (!isOnline) {
+      if (isOnline) {
+        if (googleAccessToken) {
+          syncWithGoogleDrive(true);
+        } else {
+          showToast('온라인 상태입니다. Google 로그인을 연결하면 드라이브 cores/ 폴더와 실시간 동기화됩니다.');
+        }
+      } else {
         showToast('오프라인 모드로 전환되었습니다. 모든 기록은 기기 내부에 안전하게 시간순 저장됩니다.');
       }
     }
 
-    function triggerManualSync() {
+    function triggerManualSync(isManual = true) {
       if (!isOnline) {
         showToast('현재 오프라인 상태입니다. 상단 Sync Bridge 버튼을 눌러 온라인으로 전환해 주세요.');
         return;
       }
-      const icon = document.getElementById('sync-icon');
-      icon.classList.add('animate-spin');
-      setTimeout(() => {
-        appData.memos.forEach(m => m.synced = true);
-        appData.pendingSyncCount = 0;
-        appData.lastSync = new Date().toLocaleTimeString('ko-KR');
-        saveUserData();
-        icon.classList.remove('animate-spin');
-        renderMemos();
-        showToast('Google Drive [cores/] 루트 폴더와 양방향 동기화가 완료되었습니다.');
-      }, 500);
+      if (!googleAccessToken) {
+        showToast('Google Drive 연동을 위해 우측 상단의 [Google 로그인]을 먼저 진행해 주세요.');
+        startRealGoogleLogin();
+        return;
+      }
+      syncWithGoogleDrive(isManual);
     }
 
     function updateSyncStatusUI() {
@@ -1046,11 +1365,16 @@
       const txt = document.getElementById('sync-status-text');
       const shortTxt = document.getElementById('sync-status-short');
       const dot = document.getElementById('account-dot');
-      if (isOnline) {
+      if (isOnline && googleAccessToken) {
         btn.className = 'flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold transition-all bg-emerald-600 text-white shadow-sm';
+        txt.textContent = 'Drive: 동기화됨';
+        shortTxt.textContent = 'SYNC';
+        dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-500';
+      } else if (isOnline) {
+        btn.className = 'flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold transition-all bg-blue-600 text-white shadow-sm';
         txt.textContent = 'Sync: 온라인';
         shortTxt.textContent = 'ON';
-        dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-500';
+        dot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-blue-500';
       } else {
         btn.className = 'flex items-center space-x-1.5 px-2.5 sm:px-3 py-1 rounded-full text-xs font-semibold transition-all bg-slate-800 text-amber-300 shadow-sm';
         txt.textContent = 'Sync: 오프라인';
@@ -1344,7 +1668,7 @@
     }
 
     // 카테고리 삭제 시 미정으로 쏟지 않고 cores/99_Deleted_Categories로 폴더째 격리
-    function archiveCategoryToDeletedFolder(catId) {
+    async function archiveCategoryToDeletedFolder(catId) {
       const idx = appData.categories.findIndex(c => c.id === catId);
       if (idx === -1) return;
       const [removedCat] = appData.categories.splice(idx, 1);
@@ -1355,6 +1679,14 @@
       if (selectedCategory === removedCat.name) selectCategory('미정');
       if (activeWorkspaceCatId === catId && appData.categories.length > 0) {
         activeWorkspaceCatId = appData.categories[0].id;
+      }
+
+      // Google Drive 연결 시 99_Deleted_Categories 폴더에도 격리 문서 생성
+      if (googleAccessToken && isOnline && driveFolderIds.deleted) {
+        const catMemos = appData.memos.filter(m => m.category === removedCat.name);
+        const delMd = `# [격리됨] ${removedCat.name}\n- 격리 일시: ${removedCat.deletedAt}\n\n` +
+          (catMemos.map(m => `- [${m.createdAt}] ${m.content}`).join('\n') || '- 내부 메모 없음');
+        upsertMarkdownFileInDrive(`[DELETED]_${removedCat.name}.md`, driveFolderIds.deleted, delMd).catch(() => {});
       }
 
       saveUserData();
@@ -2100,15 +2432,17 @@
 
     // 설정 & Fallback 팝업
     function openSettingsModal() {
-      document.getElementById('setting-client-id').value = localStorage.getItem('CORSE_CLIENT_ID') || '';
+      document.getElementById('setting-client-id').value = getActiveClientId();
       document.getElementById('setting-gemini-key').value = localStorage.getItem('CORSE_GEMINI_KEY') || '';
       document.getElementById('settings-modal').classList.remove('hidden');
       lucide.createIcons();
     }
     function closeSettingsModal() { document.getElementById('settings-modal').classList.add('hidden'); }
     function saveSettings() {
-      localStorage.setItem('CORSE_CLIENT_ID', document.getElementById('setting-client-id').value.trim());
+      const cid = document.getElementById('setting-client-id').value.trim();
+      if (cid) localStorage.setItem('CORSE_CLIENT_ID', cid);
       localStorage.setItem('CORSE_GEMINI_KEY', document.getElementById('setting-gemini-key').value.trim());
+      initGoogleOAuthClient();
       closeSettingsModal();
       showToast('환경설정이 저장되었습니다.');
     }
@@ -2162,7 +2496,26 @@
     }
 
     window.onload = function () {
+      const savedEmail = localStorage.getItem('CORSE_LAST_EMAIL');
+      const savedName = localStorage.getItem('CORSE_LAST_NAME');
+      const savedToken = sessionStorage.getItem('CORSE_G_TOKEN');
+
+      if (savedEmail && savedName) {
+        applyConnectedUserUI(savedEmail, savedName);
+      }
+      if (savedToken) {
+        googleAccessToken = savedToken;
+      }
+
       loadUserData();
+
+      // GIS 스크립트 로드 후 클라이언트 초기화
+      setTimeout(() => {
+        initGoogleOAuthClient();
+        if (googleAccessToken && isOnline) {
+          syncWithGoogleDrive(false);
+        }
+      }, 600);
     };
   </script>
 </body>
