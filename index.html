@@ -2542,7 +2542,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const ALL=['memo','workspace','balance','finance','drive'];
 const OFF='nav-btn relative px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5';
 const ON='nav-btn relative px-3 py-2 rounded-lg text-sm font-semibold bg-slate-900 text-white transition flex items-center gap-1.5';
-let curId=null,q='',sort='new',tag='',mode='log',routed=false,selDay='',range=30,balLock=true;
+let curId=null,q='',sort='new',tag='',mode='log',routed=false,selDay='',range=30,balLock=true,rSel='',rv={r:10,s:3},rAdd=false,rEdit=false;
 const tagsOf=m=>[...new Set([...(m.tags||[]),...((m.content||'').match(/#[^\s#]+/g)||[])])];
 const cats=()=>appData.categories||[];
 const curCat=()=>cats().find(c=>c.id===curId);
@@ -2569,7 +2569,7 @@ window.switchTab=function(t){
 };
 const _ra=window.renderAll;
 window.renderAll=function(){
-  _ra();
+  _ra();renderDash();
   if(!routed){routed=true;route();return;}
   if(!$('view-cats').classList.contains('hidden'))renderCats();
   if(!$('view-cat').classList.contains('hidden')&&curCat())renderCatList();
@@ -2591,13 +2591,13 @@ function renderCats(){
 }
 
 function openCat(c){
-  curId=c.id;q='';sort='new';tag='';mode='log';selDay='';range=30;unboard();showCx('cat');
+  curId=c.id;q='';sort='new';tag='';mode='log';rSel='';rAdd=false;rEdit=false;selDay='';range=30;unboard();showCx('cat');
   const t=TEMPLATE_TYPES.find(x=>x.id===c.type)||{};
   $('view-cat').innerHTML=
   '<div class="flex items-center gap-2"><button onclick="location.hash=\'#/cats\'" class="p-2 w-10 h-10 rounded-xl bg-white border border-slate-200">←</button><div class="min-w-0"><div class="text-[11px] font-bold text-indigo-600">'+esc((t.label||'')+(t.badge?' ('+t.badge+')':''))+'</div><h2 class="text-lg font-bold truncate">'+esc(c.name)+'</h2></div><button onclick="cxExport()" class="ml-auto text-xs font-semibold px-3 py-2 rounded-xl bg-white border border-slate-200">⬇ JSON</button></div>'+
   '<div id="cx-stats" class="grid grid-cols-3 gap-2"></div>'+
   '<div class="flex gap-2"><button id="cx-m-log" onclick="cxMode(\'log\')" class="flex-1 py-2 rounded-xl text-sm font-semibold">기록</button><button id="cx-m-board" onclick="cxMode(\'board\')" class="flex-1 py-2 rounded-xl text-sm font-semibold">전용 보드</button></div>'+
-  '<div id="cx-log" class="space-y-3"><div id="cx-chart" class="bg-white rounded-2xl border border-slate-200 p-3"></div>'+
+  '<div id="cx-log" class="space-y-3"><div id="cx-chart" class="bg-white rounded-2xl border border-slate-200 p-3"></div><div id="cx-routine" class="bg-white rounded-2xl border border-slate-200 p-3 space-y-2.5"></div>'+
    '<div class="bg-white rounded-2xl border border-slate-200 p-3 space-y-2"><textarea id="cx-in" rows="3" placeholder="이 카테고리에 기록 (#태그 로 태그 지정)" class="w-full text-sm border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-400"></textarea><div class="flex gap-2"><input id="cx-h" type="number" step="0.5" min="0" placeholder="시간(h)" class="w-28 border border-slate-200 rounded-xl px-3 py-2 text-sm"><button onclick="cxAdd()" class="flex-1 bg-slate-900 text-white rounded-xl text-sm font-semibold py-2">기록 추가</button></div></div>'+
    '<div class="flex gap-2"><input id="cx-q" oninput="cxQ(this.value)" placeholder="🔍 검색 (내용·태그)" class="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white"><select onchange="cxSort(this.value)" class="border border-slate-200 rounded-xl px-2 py-2 text-sm bg-white"><option value="new">최신순</option><option value="old">오래된순</option><option value="hours">시간 많은순</option></select></div>'+
    '<div id="cx-tags" class="flex flex-wrap gap-1.5"></div><div id="cx-list" class="space-y-2"></div></div>'+
@@ -2608,7 +2608,7 @@ function renderCatList(){
   const c=curCat();if(!c||!$('cx-list'))return;
   const s=stat(c),all=s.ms,counts={};all.forEach(m=>tagsOf(m).forEach(t=>counts[t]=(counts[t]||0)+1));
   $('cx-stats').innerHTML=[['기록',all.length+'건'],['누적',s.h.toFixed(1)+'h'],['고정',all.filter(m=>m.pinned).length+'개']].map(a=>'<div class="bg-white rounded-xl border border-slate-200 p-2.5 text-center"><div class="text-[10px] text-slate-400">'+a[0]+'</div><div class="font-bold text-sm">'+a[1]+'</div></div>').join('');
-  renderChart(all);$('cx-tags').innerHTML=Object.keys(counts).map(t=>'<button class="cx-chip '+(t===tag?'on':'')+'" onclick="cxTag(\''+esc(t).replace(/'/g,'')+'\')">'+esc(t)+' '+counts[t]+'</button>').join('');
+  renderChart(all);renderRoutine();$('cx-tags').innerHTML=Object.keys(counts).map(t=>'<button class="cx-chip '+(t===tag?'on':'')+'" onclick="cxTag(\''+esc(t).replace(/'/g,'')+'\')">'+esc(t)+' '+counts[t]+'</button>').join('');
   const kw=q.toLowerCase();
   let l=all.filter(m=>(!selDay||dkey(m)===selDay)&&(!tag||tagsOf(m).includes(tag))&&(!kw||(m.content||'').toLowerCase().includes(kw)));
   l.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(sort==='old'?a.id-b.id:sort==='hours'?(b.duration||0)-(a.duration||0):b.id-a.id));
@@ -2685,6 +2685,62 @@ $('view-balance').insertAdjacentHTML('afterbegin','<button id="bal-lock-btn" onc
 const _rb=window.renderBalanceChecker;
 window.renderBalanceChecker=function(){_rb();setBalLock(balLock);};
 setBalLock(true);
+
+// ---- 메인: 오늘의 수행 픽토그램 ----
+const ICON={study:'🧠',creative:'✍️',career:'💼',routine:'💪',ledger:'💰'};
+$('view-memo').insertAdjacentHTML('afterbegin','<section id="cx-dash" class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-3"></section>');
+['memo-list-container','memo-filter-pills'].forEach(i=>{const e=$(i);if(e)e.style.setProperty('display','none','important');});
+function renderDash(){
+  const el=$('cx-dash');if(!el||!appData.categories)return;
+  const bs=appData.balanceSettings,days=/월간/.test(bs.cycle)?30:7,today=fmt(new Date());
+  let tg=0,th=0,done=0,n=0;
+  const tiles=cats().filter(c=>c.weight>0||appData.memos.some(m=>m.category===c.name&&dkey(m)===today)).map(c=>{
+    const ms=appData.memos.filter(m=>m.category===c.name&&dkey(m)===today),h=ms.reduce((s,m)=>s+(+m.duration||0),0),g=+(bs.targetHours*c.weight/100/days).toFixed(2);
+    const p=g>0?Math.min(100,h/g*100):(ms.length?100:0),ok=p>=100;tg+=g;th+=Math.min(h,g||h);n++;if(ok)done++;
+    return '<a href="#/c/'+encodeURIComponent(c.id)+'" class="shrink-0 w-[76px] text-center"><div class="relative mx-auto w-14 h-14 rounded-full grid place-items-center" style="background:conic-gradient('+(ok?'#10b981':'#4f46e5')+' '+p+'%,#e2e8f0 0)"><div class="w-11 h-11 rounded-full bg-white grid place-items-center text-xl">'+(ICON[c.type]||'📌')+'</div>'+(ok?'<span class="absolute -right-1 -top-1 text-sm">✅</span>':'')+'</div><div class="text-[11px] font-semibold text-slate-700 mt-1 truncate">'+esc(c.name)+'</div><div class="text-[10px] text-slate-400">'+h.toFixed(1)+' / '+g.toFixed(1)+'h</div></a>';}).join('');
+  const tp=tg>0?Math.round(Math.min(100,th/tg*100)):0;
+  el.innerHTML='<div class="flex items-center justify-between"><div><div class="text-sm font-bold text-slate-900">오늘의 수행</div><div class="text-[11px] text-slate-400">예상 '+tg.toFixed(1)+'h · 완료 '+done+'/'+n+' · '+(days===30?'월':'주')+' 목표 '+bs.targetHours+'h ÷ '+days+'일 기준</div></div><div class="text-2xl font-extrabold text-indigo-600">'+tp+'%</div></div><div class="h-2 rounded-full bg-slate-100 overflow-hidden"><div class="h-full bg-indigo-500" style="width:'+tp+'%"></div></div><div class="flex gap-2 overflow-x-auto pb-1">'+tiles+'</div>';
+}
+
+// ---- 카테고리: 루틴형 기록 (루틴 선택 → 횟수·세트 → 자동 정리) ----
+const PRE={routine:[['스쿼트','회',15,4,1],['푸시업','회',12,3,1],['플랭크','초',45,3,1],['런지','회',12,3,1],['러닝','분',30,1,1]],
+ study:[['단어 암기','개',20,2,5],['롤플레잉','분',20,1,1],['오답 복습','문제',10,2,3],['쉐도잉','회',3,3,3]],
+ creative:[['집필','분',60,1,1],['아이디어 메모','개',3,1,2],['퇴고','쪽',3,1,10]],
+ career:[['지원서 작성','건',1,1,60],['면접 연습','회',1,2,15],['자격증 공부','분',40,1,1]],
+ ledger:[['지출 기록','건',5,1,5],['자산 점검','회',1,1,10]]};
+const UNITS=['회','초','분','개','쪽','건','문제','km'],stepOf=u=>(u==='초'||u==='분'||u==='개')?5:1;
+function renderRoutine(){
+  const c=curCat(),el=$('cx-routine');if(!c||!el)return;
+  if(!c.routines){c.routines=(PRE[c.type]||[['기록','회',1,1,5]]).map((p,i)=>({id:'r'+Date.now()+i,n:p[0],u:p[1],r:p[2],s:p[3],m:p[4]}));saveUserData();}
+  const rs=c.routines,r=rs.find(x=>x.id===rSel);
+  let h='<div class="flex items-center justify-between"><span class="text-xs font-bold text-slate-700">⚡ 루틴 기록</span><span class="flex gap-1"><button onclick="cxREdit()" class="cx-chip '+(rEdit?'on':'')+'">✏️ 편집</button><button onclick="cxRForm()" class="cx-chip '+(rAdd?'on':'')+'">＋ 추가</button></span></div>';
+  h+='<div class="flex flex-wrap gap-1.5">'+rs.map(x=>'<button onclick="'+(rEdit?'cxRDel(\''+x.id+'\')':'cxRSel(\''+x.id+'\')')+'" class="cx-chip '+(x.id===rSel?'on':'')+'" style="font-size:13px;padding:6px 12px">'+esc(x.n)+(rEdit?' ✕':'')+'</button>').join('')+'</div>';
+  if(rAdd)h+='<div class="grid grid-cols-5 gap-1.5 bg-slate-50 rounded-xl p-2"><input id="rn-n" placeholder="루틴명" class="col-span-3 border border-slate-200 rounded-lg px-2 py-1.5 text-sm"><select id="rn-u" class="col-span-2 border border-slate-200 rounded-lg px-1 py-1.5 text-sm">'+UNITS.map(u=>'<option>'+u+'</option>').join('')+'</select><input id="rn-r" type="number" value="10" title="기본 횟수" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"><input id="rn-s" type="number" value="3" title="기본 세트" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"><input id="rn-m" type="number" value="1" title="세트당 분" class="border border-slate-200 rounded-lg px-2 py-1.5 text-sm"><button onclick="cxRNew()" class="col-span-2 bg-slate-900 text-white rounded-lg text-sm font-semibold">추가</button><div class="col-span-5 text-[10px] text-slate-400">기본 횟수 · 기본 세트 · 세트당 분(시간 환산용, 단위가 분/초면 자동)</div></div>';
+  if(r){const st=(k,l,u,v)=>'<div class="flex items-center gap-1"><button onclick="cxRStep(\''+k+'\',-1)" class="w-9 h-9 rounded-xl bg-slate-100 text-lg font-bold">−</button><input type="number" value="'+v+'" oninput="cxRSet(\''+k+'\',this.value)" class="w-14 h-9 text-center border border-slate-200 rounded-xl font-bold"><button onclick="cxRStep(\''+k+'\',1)" class="w-9 h-9 rounded-xl bg-slate-100 text-lg font-bold">＋</button><span class="text-xs text-slate-500">'+u+'</span></div>';
+    h+='<div class="flex flex-wrap items-center gap-3 bg-indigo-50 rounded-xl p-2.5"><b class="text-sm text-indigo-700">'+esc(r.n)+'</b>'+st('r','',r.u,rv.r)+st('s','','세트',rv.s)+'<button onclick="cxRLog()" class="ml-auto px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold">기록</button></div>';}
+  const today=fmt(new Date()),g={};let hh=0;
+  appData.memos.filter(m=>m.category===c.name&&m.routine&&dkey(m)===today).forEach(m=>{const o=g[m.routine.n]=g[m.routine.n]||{t:0,s:0,u:m.routine.u,k:0};o.t+=m.routine.r*m.routine.s;o.s+=m.routine.s;o.k++;hh+=+m.duration||0;});
+  const ks=Object.keys(g);
+  if(ks.length){const txt='['+c.name+'] '+today+' 수행 정리\n'+ks.map(k=>'• '+k+' 총 '+g[k].t+g[k].u+' ('+g[k].s+'세트)').join('\n')+'\n합계 '+hh.toFixed(1)+'h';
+    window._cxTxt=txt;h+='<div class="bg-slate-50 rounded-xl p-3"><div class="flex justify-between items-center mb-1"><span class="text-xs font-bold text-slate-600">📋 오늘 정리</span><button onclick="navigator.clipboard.writeText(window._cxTxt).then(()=>showToast(\'복사됨\'))" class="cx-chip">복사</button></div><pre class="text-xs text-slate-700 whitespace-pre-wrap font-sans">'+esc(txt)+'</pre></div>';}
+  el.innerHTML=h;
+}
+window.cxREdit=()=>{rEdit=!rEdit;renderRoutine();};
+window.cxRForm=()=>{rAdd=!rAdd;renderRoutine();};
+window.cxRSel=id=>{const r=curCat().routines.find(x=>x.id===id);rSel=id;rv={r:r.r,s:r.s};renderRoutine();};
+window.cxRStep=(k,d)=>{const r=curCat().routines.find(x=>x.id===rSel);rv[k]=Math.max(1,rv[k]+d*(k==='r'?stepOf(r.u):1));renderRoutine();};
+window.cxRSet=(k,v)=>{rv[k]=Math.max(1,parseInt(v)||1);};
+window.cxRNew=()=>{const n=$('rn-n').value.trim();if(!n)return;const c=curCat(),id='r'+Date.now();
+  c.routines.push({id,n,u:$('rn-u').value,r:+$('rn-r').value||1,s:+$('rn-s').value||1,m:+$('rn-m').value||1});saveUserData();rAdd=false;cxRSel(id);};
+window.cxRDel=id=>{const c=curCat(),r=c.routines.find(x=>x.id===id);if(r&&confirm("'"+r.n+"' 루틴을 삭제할까요? (기존 기록은 유지됩니다)")){c.routines=c.routines.filter(x=>x.id!==id);if(rSel===id)rSel='';saveUserData();renderRoutine();}};
+window.cxRLog=function(){
+  const c=curCat(),r=c.routines.find(x=>x.id===rSel);if(!r)return;
+  const dur=r.u==='분'?rv.r*rv.s/60:r.u==='초'?rv.r*rv.s/3600:rv.s*(r.m||1)/60,tot=rv.r*rv.s;
+  const txt=r.n+' '+rv.r+r.u+(rv.s>1?' × '+rv.s+'세트 (총 '+tot+r.u+')':'');
+  appData.memos.push({id:Date.now(),content:txt,category:c.name,duration:+dur.toFixed(2),createdAt:new Date().toLocaleString('ko-KR'),synced:isOnline,routine:{n:r.n,r:rv.r,s:rv.s,u:r.u}});
+  if(!isOnline)appData.pendingSyncCount=(appData.pendingSyncCount||0)+1;else appData.lastSync=new Date().toLocaleTimeString('ko-KR');
+  saveUserData();renderAll();showToast('기록됨: '+txt);
+};
 
 })();
 </script>
