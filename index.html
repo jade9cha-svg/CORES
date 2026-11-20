@@ -2533,6 +2533,7 @@
 }
 .cx-chip{font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;color:#475569}
 .cx-chip.on{background:#4f46e5;color:#fff;border-color:#4f46e5}
+input:disabled,select:disabled{opacity:.55;cursor:not-allowed}
 </style>
 <script>
 (function(){
@@ -2541,7 +2542,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
 const ALL=['memo','workspace','balance','finance','drive'];
 const OFF='nav-btn relative px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5';
 const ON='nav-btn relative px-3 py-2 rounded-lg text-sm font-semibold bg-slate-900 text-white transition flex items-center gap-1.5';
-let curId=null,q='',sort='new',tag='',mode='log',routed=false;
+let curId=null,q='',sort='new',tag='',mode='log',routed=false,selDay='',range=30,balLock=true;
 const tagsOf=m=>[...new Set([...(m.tags||[]),...((m.content||'').match(/#[^\s#]+/g)||[])])];
 const cats=()=>appData.categories||[];
 const curCat=()=>cats().find(c=>c.id===curId);
@@ -2564,7 +2565,7 @@ window.switchTab=function(t){
   if(t==='cats'){if(location.hash!=='#/cats')location.hash='#/cats';else route();return;}
   if(location.hash)history.replaceState(null,'',location.pathname+location.search);
   $('view-cats').classList.add('hidden');$('view-cat').classList.add('hidden');
-  unboard();_sw(t);setNav(t);
+  unboard();_sw(t);setNav(t);if(t!=='balance')setBalLock(true);
 };
 const _ra=window.renderAll;
 window.renderAll=function(){
@@ -2590,13 +2591,13 @@ function renderCats(){
 }
 
 function openCat(c){
-  curId=c.id;q='';sort='new';tag='';mode='log';unboard();showCx('cat');
+  curId=c.id;q='';sort='new';tag='';mode='log';selDay='';range=30;unboard();showCx('cat');
   const t=TEMPLATE_TYPES.find(x=>x.id===c.type)||{};
   $('view-cat').innerHTML=
   '<div class="flex items-center gap-2"><button onclick="location.hash=\'#/cats\'" class="p-2 w-10 h-10 rounded-xl bg-white border border-slate-200">←</button><div class="min-w-0"><div class="text-[11px] font-bold text-indigo-600">'+esc((t.label||'')+(t.badge?' ('+t.badge+')':''))+'</div><h2 class="text-lg font-bold truncate">'+esc(c.name)+'</h2></div><button onclick="cxExport()" class="ml-auto text-xs font-semibold px-3 py-2 rounded-xl bg-white border border-slate-200">⬇ JSON</button></div>'+
   '<div id="cx-stats" class="grid grid-cols-3 gap-2"></div>'+
   '<div class="flex gap-2"><button id="cx-m-log" onclick="cxMode(\'log\')" class="flex-1 py-2 rounded-xl text-sm font-semibold">기록</button><button id="cx-m-board" onclick="cxMode(\'board\')" class="flex-1 py-2 rounded-xl text-sm font-semibold">전용 보드</button></div>'+
-  '<div id="cx-log" class="space-y-3">'+
+  '<div id="cx-log" class="space-y-3"><div id="cx-chart" class="bg-white rounded-2xl border border-slate-200 p-3"></div>'+
    '<div class="bg-white rounded-2xl border border-slate-200 p-3 space-y-2"><textarea id="cx-in" rows="3" placeholder="이 카테고리에 기록 (#태그 로 태그 지정)" class="w-full text-sm border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-400"></textarea><div class="flex gap-2"><input id="cx-h" type="number" step="0.5" min="0" placeholder="시간(h)" class="w-28 border border-slate-200 rounded-xl px-3 py-2 text-sm"><button onclick="cxAdd()" class="flex-1 bg-slate-900 text-white rounded-xl text-sm font-semibold py-2">기록 추가</button></div></div>'+
    '<div class="flex gap-2"><input id="cx-q" oninput="cxQ(this.value)" placeholder="🔍 검색 (내용·태그)" class="flex-1 min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white"><select onchange="cxSort(this.value)" class="border border-slate-200 rounded-xl px-2 py-2 text-sm bg-white"><option value="new">최신순</option><option value="old">오래된순</option><option value="hours">시간 많은순</option></select></div>'+
    '<div id="cx-tags" class="flex flex-wrap gap-1.5"></div><div id="cx-list" class="space-y-2"></div></div>'+
@@ -2607,9 +2608,9 @@ function renderCatList(){
   const c=curCat();if(!c||!$('cx-list'))return;
   const s=stat(c),all=s.ms,counts={};all.forEach(m=>tagsOf(m).forEach(t=>counts[t]=(counts[t]||0)+1));
   $('cx-stats').innerHTML=[['기록',all.length+'건'],['누적',s.h.toFixed(1)+'h'],['고정',all.filter(m=>m.pinned).length+'개']].map(a=>'<div class="bg-white rounded-xl border border-slate-200 p-2.5 text-center"><div class="text-[10px] text-slate-400">'+a[0]+'</div><div class="font-bold text-sm">'+a[1]+'</div></div>').join('');
-  $('cx-tags').innerHTML=Object.keys(counts).map(t=>'<button class="cx-chip '+(t===tag?'on':'')+'" onclick="cxTag(\''+esc(t).replace(/'/g,'')+'\')">'+esc(t)+' '+counts[t]+'</button>').join('');
+  renderChart(all);$('cx-tags').innerHTML=Object.keys(counts).map(t=>'<button class="cx-chip '+(t===tag?'on':'')+'" onclick="cxTag(\''+esc(t).replace(/'/g,'')+'\')">'+esc(t)+' '+counts[t]+'</button>').join('');
   const kw=q.toLowerCase();
-  let l=all.filter(m=>(!tag||tagsOf(m).includes(tag))&&(!kw||(m.content||'').toLowerCase().includes(kw)));
+  let l=all.filter(m=>(!selDay||dkey(m)===selDay)&&(!tag||tagsOf(m).includes(tag))&&(!kw||(m.content||'').toLowerCase().includes(kw)));
   l.sort((a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(sort==='old'?a.id-b.id:sort==='hours'?(b.duration||0)-(a.duration||0):b.id-a.id));
   $('cx-list').innerHTML=l.length?l.map(m=>'<div onclick="openMemoModal('+m.id+')" class="bg-white rounded-2xl border '+(m.pinned?'border-amber-300':'border-slate-200')+' p-3.5 shadow-sm cursor-pointer"><div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5"><span>'+esc(m.createdAt)+(m.duration>0?' · <b class="text-indigo-600">+'+m.duration+'h</b>':'')+'</span><button onclick="event.stopPropagation();cxPin('+m.id+')" class="text-base">'+(m.pinned?'📌':'📍')+'</button></div><p class="text-sm text-slate-800 whitespace-pre-line leading-relaxed">'+esc(m.content)+'</p></div>').join(''):'<div class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-xs text-slate-400">조건에 맞는 기록이 없습니다.</div>';
   const on='bg-slate-900 text-white',off='bg-white border border-slate-200 text-slate-600';
@@ -2637,6 +2638,54 @@ window.cxExport=function(){
   const b=new Blob([JSON.stringify({category:c,memos:appData.memos.filter(m=>m.category===c.name)},null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='CORSE_'+c.name.replace(/[^\w가-힣]+/g,'_')+'.json';a.click();
 };
+// ---- 날짜별 수행 그래프 ----
+const fmt=d=>d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+function dkey(m){if(m.id>1e12)return fmt(new Date(m.id));const x=(m.createdAt||'').match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/);return x?x[1]+'-'+('0'+x[2]).slice(-2)+'-'+('0'+x[3]).slice(-2):'날짜미상';}
+function renderChart(all){
+  const by={};all.forEach(m=>{const k=dkey(m),o=by[k]=by[k]||{n:0,h:0};o.n++;o.h+=+m.duration||0;});
+  const t=new Date(),days=[];for(let i=range-1;i>=0;i--)days.push(fmt(new Date(t.getFullYear(),t.getMonth(),t.getDate()-i)));
+  const useH=days.some(k=>by[k]&&by[k].h>0),val=k=>by[k]?(useH?by[k].h:by[k].n):0,max=Math.max(1,...days.map(val));
+  const wide=range>30,step=range<=14?2:range<=30?5:10;
+  const bars=days.map(k=>{const v=val(k),hg=v?Math.max(8,v/max*100):3;return '<button onclick="cxDay(\''+k+'\')" title="'+k+(by[k]?' · '+by[k].n+'건':'')+'" class="flex flex-col items-center justify-end h-full" style="'+(wide?'width:12px;flex:none':'flex:1')+'"><div style="height:'+hg+'%;width:80%;min-width:4px" class="rounded-t '+(k===selDay?'bg-amber-500':v?'bg-indigo-500':'bg-slate-200')+'"></div></button>';}).join('');
+  const labs=days.map((k,i)=>'<div class="text-[9px] text-slate-400 whitespace-nowrap" style="'+(wide?'width:12px;flex:none':'flex:1')+'">'+(i%step===0||i===days.length-1&&0?(+k.slice(5,7))+'/'+(+k.slice(8)):'')+'</div>').join('');
+  const sd=selDay&&by[selDay]?by[selDay]:{n:0,h:0};
+  $('cx-chart').innerHTML='<div class="flex items-center justify-between mb-2"><span class="text-xs font-bold text-slate-700">날짜별 수행 ('+(useH?'시간 h':'기록 건수')+')</span><span class="flex gap-1">'+[14,30,90].map(r=>'<button onclick="cxRange('+r+')" class="cx-chip '+(r===range?'on':'')+'">'+r+'일</button>').join('')+'</span></div>'+
+  '<div id="cx-scroll" class="overflow-x-auto"><div style="'+(wide?'width:'+range*12+'px':'width:100%')+'"><div class="flex items-end gap-px" style="height:112px">'+bars+'</div><div class="flex gap-px mt-1">'+labs+'</div></div></div>'+
+  '<div class="flex flex-wrap items-center justify-between gap-2 mt-2 text-xs"><span class="text-slate-500">'+(selDay?'📅 <b>'+selDay+'</b> · '+sd.n+'건 · '+sd.h.toFixed(1)+'h':'막대를 누르면 그날의 기록이 아래에 표시돼요')+'</span><span class="flex gap-1.5">'+(selDay?'<button onclick="cxDay(\'\')" class="cx-chip">해제</button><button onclick="cxSave(1)" class="cx-chip on">📝 이 날 저장</button>':'')+'<button onclick="cxSave(0)" class="cx-chip">📝 전체 저장(날짜별)</button></span></div>';
+  if(wide)$('cx-scroll').scrollLeft=1e5;
+}
+window.cxDay=k=>{selDay=selDay===k?'':k;renderCatList();};
+window.cxRange=r=>{range=r;renderCatList();};
+window.cxSave=function(one){
+  const c=curCat();if(!c)return;
+  let ms=appData.memos.filter(m=>m.category===c.name);if(one&&selDay)ms=ms.filter(m=>dkey(m)===selDay);
+  if(!ms.length){showToast('저장할 기록이 없습니다.');return;}
+  const g={},W=['일','월','화','수','목','금','토'],H=l=>l.reduce((a,m)=>a+(+m.duration||0),0).toFixed(1);
+  ms.forEach(m=>(g[dkey(m)]=g[dkey(m)]||[]).push(m));
+  const o=['['+c.name+'] 수행 기록','저장일: '+new Date().toLocaleString('ko-KR'),'총 '+ms.length+'건 · '+H(ms)+'h','','='.repeat(32)];
+  Object.keys(g).sort().forEach(k=>{
+    const l=g[k].sort((a,b)=>a.id-b.id),wd=/^\d{4}-/.test(k)?' ('+W[new Date(k+'T00:00:00').getDay()]+')':'';
+    o.push('','■ '+k+wd+' · '+l.length+'건 · '+H(l)+'h');
+    l.forEach(m=>{const tm=m.id>1e12?new Date(m.id).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}):'';
+      o.push('- '+(tm?tm+' ':'')+String(m.content).replace(/\r?\n/g,'\n    ')+(m.duration>0?' ['+m.duration+'h]':''));});
+  });
+  const b=new Blob(['\ufeff'+o.join('\n').replace(/\r?\n/g,'\r\n')],{type:'text/plain;charset=utf-8'});
+  const e=document.createElement('a');e.href=URL.createObjectURL(b);e.download='CORSE_'+c.name.replace(/[^\w가-힣]+/g,'_')+'_'+(one&&selDay?selDay:'전체')+'.txt';e.click();
+};
+
+// ---- 밸런스 체커 수정 잠금 (스크롤 중 실수 방지) ----
+function setBalLock(v){
+  balLock=v;
+  ['balance-cycle-select','cycle-target-hours'].forEach(id=>{const e=$(id);if(e)e.disabled=v;});
+  document.querySelectorAll('#balance-items-container input[type=range]').forEach(e=>e.disabled=v);
+  const b=$('bal-lock-btn');if(b){b.innerHTML=v?'🔒 설정 잠금 중 — 눌러서 ✏️ 수정 켜기':'✏️ 수정 중 — 눌러서 🔒 잠그기';b.className='sticky top-16 z-30 w-full text-left text-xs font-semibold px-4 py-2.5 rounded-xl border shadow-sm '+(v?'bg-slate-100 text-slate-600 border-slate-200':'bg-amber-100 text-amber-800 border-amber-300');}
+}
+window.toggleBalLock=()=>setBalLock(!balLock);
+$('view-balance').insertAdjacentHTML('afterbegin','<button id="bal-lock-btn" onclick="toggleBalLock()"></button>');
+const _rb=window.renderBalanceChecker;
+window.renderBalanceChecker=function(){_rb();setBalLock(balLock);};
+setBalLock(true);
+
 })();
 </script>
 
